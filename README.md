@@ -88,14 +88,10 @@ curl -s http://localhost:5000/health
 
 ### `POST /predict`
 
-Тело — JSON-объект с 23 признаками. Дополнительно можно передать:
+Параметры запроса:
+`model_version`: тип string, нужно для того чтобы принудительно выбрать версию (`"v1"` или `"v2"`)
+`user_id`: тип string, если `model_version` не задан, то будет применён A/B-сплит по `user_id`
 
-| Поле            | Тип    | Назначение                                                                 |
-|-----------------|--------|----------------------------------------------------------------------------|
-| `model_version` | string | принудительно выбрать версию (`"v1"` или `"v2"`)                            |
-| `user_id`       | string | если `model_version` не задан — будет применён A/B-сплит по `user_id`       |
-
-Если ничего не задано, используется версия по умолчанию (`v1`).
 
 ```bash
 curl -s -X POST http://localhost:5000/predict \
@@ -160,11 +156,11 @@ curl -s -X POST http://localhost:5000/predict/ab \
 Признаки одинаковые для обеих версий (23 поля: `LIMIT_BAL`, `SEX`, `EDUCATION`,
 `MARRIAGE`, `AGE`, `PAY_0`, `PAY_2..PAY_6`, `BILL_AMT1..6`, `PAY_AMT1..6`).
 
-| Версия | Алгоритм                                                  |
-|--------|-----------------------------------------------------------|
-| v1     | `StandardScaler` -> `LogisticRegression(class_weight=balanced, C=0.5, solver=liblinear)` |
-| v2     | `GradientBoostingClassifier(n_estimators=200, lr=0.05, max_depth=3, subsample=0.8)`     |
+### Модель v1
+`StandardScaler` -> `LogisticRegression(class_weight=balanced, C=0.5, solver=liblinear)`
 
+### Модель v2
+`GradientBoostingClassifier(n_estimators=200, lr=0.05, max_depth=3, subsample=0.8)`
 
 
 | Метрика                  |  v1 (LogReg) | v2 (GBM) |
@@ -242,13 +238,10 @@ ETL-пайплайн с фичами в реальном времени, отд�
 
 ### Постановка
 
-| Параметр                | Значение                                                       |
-|-------------------------|----------------------------------------------------------------|
-| Контроль (control)      | модель v1 — `LogisticRegression`                               |
-| Тест (treatment)        | модель v2 — `GradientBoostingClassifier`                       |
-| Сплит трафика           | 50/50 по `user_id`                                             |
+ Контроль (control): модель v1 — `LogisticRegression`
+ Тест (treatment): модель v2 — `GradientBoostingClassifier`   
 
-Сплит реализован в `app/api.py`:
+Сплит трафика 50/50 по `user_id` реализован в `app/api.py`:
 
 
 (Повторный запрос того же `user_id` всегда
@@ -314,9 +307,6 @@ with open("models/model_v1.onnx", "wb") as f:
 ```
 
 ### Зачем uWSGI + NGINX
-
-`flask run` (или `app.run`) — это однопоточный development-сервер: он
-блокируется на каждом инференсе и не управляет процессами. В production:
 
 - **uWSGI / gunicorn** держит пул воркеров, перезапускает упавших, ограничивает
   RSS, умеет gracefully degrade.
